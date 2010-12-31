@@ -7,28 +7,20 @@ a string) and returns a tuple in this format:
     (view_function, function_args, function_kwargs)
 """
 
-import re
-
-from django.http import Http404
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured, ViewDoesNotExist
+from django.http import Http404
 from django.utils.datastructures import MultiValueDict
 from django.utils.encoding import iri_to_uri, force_unicode, smart_str
 from django.utils.functional import memoize
 from django.utils.importlib import import_module
 from django.utils.regex_helper import normalize
 from django.utils.thread_support import currentThread
+import re
 
-_resolver_cache = {} # Maps URLconf modules to RegexURLResolver instances.
+
 _callable_cache = {} # Maps view and url pattern names to their view functions.
 
-# SCRIPT_NAME prefixes for each thread are stored here. If there's no entry for
-# the current thread (which is the only one we ever access), it is assumed to
-# be empty.
-_prefixes = {}
-
-# Overridden URLconfs for each thread are stored here.
-_urlconfs = {}
 
 class ResolverMatch(object):
     def __init__(self, func, args, kwargs, url_name=None, app_name=None, namespaces=None):
@@ -97,13 +89,6 @@ def get_callable(lookup_view, can_fail=False):
             pass
     return lookup_view
 get_callable = memoize(get_callable, _callable_cache, 1)
-
-def get_resolver(urlconf):
-    if urlconf is None:
-        from django.conf import settings
-        urlconf = settings.ROOT_URLCONF
-    return RegexURLResolver(r'^/', urlconf)
-get_resolver = memoize(get_resolver, _resolver_cache, 1)
 
 def get_mod_func(callback):
     # Converts 'django.views.news.stories.story_detail' to
@@ -335,101 +320,141 @@ class RegexURLResolver(object):
         raise NoReverseMatch("Reverse for '%s' with arguments '%s' and keyword "
                 "arguments '%s' not found." % (lookup_view_s, args, kwargs))
 
-def resolve(path, urlconf=None):
-    if urlconf is None:
-        urlconf = get_urlconf()
-    return get_resolver(urlconf).resolve(path)
 
-def reverse(viewname, urlconf=None, args=None, kwargs=None, prefix=None, current_app=None):
-    if urlconf is None:
-        urlconf = get_urlconf()
-    resolver = get_resolver(urlconf)
-    args = args or []
-    kwargs = kwargs or {}
+class ResolverCache(object):
+    def __init__(self):
+        self._resolver_class = None
+        # Overridden URLconfs for each thread are stored here.
+        self._urlconfs = {}
+        self._resolver_cache = {} # Maps URLconf modules to RegexURLResolver instances.
+        self._callable_cache = {} # Maps view and url pattern names to their view functions.
+        
+        # SCRIPT_NAME prefixes for each thread are stored here. If there's no entry for
+        # the current thread (which is the only one we ever access), it is assumed to
+        # be empty.
+        self._prefixes = {}
+        
+    @property
+    def resolver_class(self):
+        if not self._resolver_class:
+            module_name, class_name = settings.URL_RESOLVER.rsplit('.', 1)
+            module = import_module(module_name)
+            klass = getattr(module, class_name)
+            self._resolver_class = klass
+        return self._resolver_class
+    
+    def get_resolver(self, urlconf):
+        if urlconf is None:
+            urlconf = settings.ROOT_URLCONF
+        if urlconf not in self._resolver_cache:
+            self._resolver_cache[urlconf] = self.resolver_class(r'^/', urlconf)
+        return self._resolver_cache[urlconf]
 
-    if prefix is None:
-        prefix = get_script_prefix()
+    def resolve(self, path, urlconf=None):
+        if urlconf is None:
+            urlconf = self.get_urlconf()
+        return self.get_resolver(urlconf).resolve(path)
 
-    if not isinstance(viewname, basestring):
-        view = viewname
-    else:
-        parts = viewname.split(':')
-        parts.reverse()
-        view = parts[0]
-        path = parts[1:]
+    def reverse(self, viewname, urlconf=None, args=None, kwargs=None,
+                prefix=None, current_app=None):
+        if urlconf is None:
+            urlconf = self.get_urlconf()
+        resolver = self.get_resolver(urlconf)
+        args = args or []
+        kwargs = kwargs or {}
+    
+        if prefix is None:
+            prefix = self.get_script_prefix()
+    
+        if not isinstance(viewname, basestring):
+            view = viewname
+        else:
+            parts = viewname.split(':')
+            parts.reverse()
+            view = parts[0]
+            path = parts[1:]
+    
+            resolved_path = []
+            while path:
+                ns = path.pop()
+    
+                # Lookup the name to see if it could be an app identifier
+                try:
+                    app_list = resolver.app_dict[ns]
+                    # Yes! Path part matches an app in the current Resolver
+                    if current_app and current_app in app_list:
+                        # If we are reversing for a particular app, use that namespace
+                        ns = current_app
+                    elif ns not in app_list:
+                        # The name isn't shared by one of the instances (i.e., the default)
+                        # so just pick the first instance as the default.
+                        ns = app_list[0]
+                except KeyError:
+                    pass
+    
+                try:
+                    extra, resolver = resolver.namespace_dict[ns]
+                    resolved_path.append(ns)
+                    prefix = prefix + extra
+                except KeyError, key:
+                    if resolved_path:
+                        raise NoReverseMatch("%s is not a registered namespace inside '%s'" % (key, ':'.join(resolved_path)))
+                    else:
+                        raise NoReverseMatch("%s is not a registered namespace" % key)
+    
+        return iri_to_uri(u'%s%s' % (prefix, resolver.reverse(view,
+                *args, **kwargs)))
+    
+    def clear_url_caches(self):
+        self._resolver_cache.clear()
+        _callable_cache.clear()
+    
+    def set_script_prefix(self, prefix):
+        """
+        Sets the script prefix for the current thread.
+        """
+        if not prefix.endswith('/'):
+            prefix += '/'
+        self._prefixes[currentThread()] = prefix
+    
+    def get_script_prefix(self):
+        """
+        Returns the currently active script prefix. Useful for client code that
+        wishes to construct their own URLs manually (although accessing the request
+        instance is normally going to be a lot cleaner).
+        """
+        return self._prefixes.get(currentThread(), u'/')
+    
+    def set_urlconf(self, urlconf_name):
+        """
+        Sets the URLconf for the current thread (overriding the default one in
+        settings). Set to None to revert back to the default.
+        """
+        thread = currentThread()
+        if urlconf_name:
+            self._urlconfs[thread] = urlconf_name
+        else:
+            # faster than wrapping in a try/except
+            if thread in self._urlconfs:
+                del self._urlconfs[thread]
+    
+    def get_urlconf(self, default=None):
+        """
+        Returns the root URLconf to use for the current thread if it has been
+        changed from the default one.
+        """
+        thread = currentThread()
+        if thread in self._urlconfs:
+            return self._urlconfs[thread]
+        return default
 
-        resolved_path = []
-        while path:
-            ns = path.pop()
+resolver_cache = ResolverCache()
 
-            # Lookup the name to see if it could be an app identifier
-            try:
-                app_list = resolver.app_dict[ns]
-                # Yes! Path part matches an app in the current Resolver
-                if current_app and current_app in app_list:
-                    # If we are reversing for a particular app, use that namespace
-                    ns = current_app
-                elif ns not in app_list:
-                    # The name isn't shared by one of the instances (i.e., the default)
-                    # so just pick the first instance as the default.
-                    ns = app_list[0]
-            except KeyError:
-                pass
-
-            try:
-                extra, resolver = resolver.namespace_dict[ns]
-                resolved_path.append(ns)
-                prefix = prefix + extra
-            except KeyError, key:
-                if resolved_path:
-                    raise NoReverseMatch("%s is not a registered namespace inside '%s'" % (key, ':'.join(resolved_path)))
-                else:
-                    raise NoReverseMatch("%s is not a registered namespace" % key)
-
-    return iri_to_uri(u'%s%s' % (prefix, resolver.reverse(view,
-            *args, **kwargs)))
-
-def clear_url_caches():
-    global _resolver_cache
-    global _callable_cache
-    _resolver_cache.clear()
-    _callable_cache.clear()
-
-def set_script_prefix(prefix):
-    """
-    Sets the script prefix for the current thread.
-    """
-    if not prefix.endswith('/'):
-        prefix += '/'
-    _prefixes[currentThread()] = prefix
-
-def get_script_prefix():
-    """
-    Returns the currently active script prefix. Useful for client code that
-    wishes to construct their own URLs manually (although accessing the request
-    instance is normally going to be a lot cleaner).
-    """
-    return _prefixes.get(currentThread(), u'/')
-
-def set_urlconf(urlconf_name):
-    """
-    Sets the URLconf for the current thread (overriding the default one in
-    settings). Set to None to revert back to the default.
-    """
-    thread = currentThread()
-    if urlconf_name:
-        _urlconfs[thread] = urlconf_name
-    else:
-        # faster than wrapping in a try/except
-        if thread in _urlconfs:
-            del _urlconfs[thread]
-
-def get_urlconf(default=None):
-    """
-    Returns the root URLconf to use for the current thread if it has been
-    changed from the default one.
-    """
-    thread = currentThread()
-    if thread in _urlconfs:
-        return _urlconfs[thread]
-    return default
+get_urlconf = resolver_cache.get_urlconf
+set_urlconf = resolver_cache.set_urlconf
+get_script_prefix = resolver_cache.get_script_prefix
+set_script_prefix = resolver_cache.set_script_prefix
+clear_url_caches = resolver_cache.clear_url_caches
+get_resolver = resolver_cache.get_resolver
+resolve = resolver_cache.resolve
+reverse = resolver_cache.reverse

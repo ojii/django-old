@@ -214,6 +214,9 @@ EMAIL_SUBJECT_PREFIX = '[Django] '
 # Whether to append trailing slashes to URLs.
 APPEND_SLASH = True
 
+# Class to use for URL resolving.
+URL_RESOLVER = 'django.core.urlresolvers.RegexURLResolver'
+
 # Whether to prepend the "www." subdomain to URLs that don't have it.
 PREPEND_WWW = False
 
