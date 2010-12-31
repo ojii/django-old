@@ -7,17 +7,18 @@ a string) and returns a tuple in this format:
     (view_function, function_args, function_kwargs)
 """
 
-import re
-
-from django.http import Http404
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured, ViewDoesNotExist
+from django.http import Http404
 from django.utils.datastructures import MultiValueDict
 from django.utils.encoding import iri_to_uri, force_unicode, smart_str
 from django.utils.functional import memoize
 from django.utils.importlib import import_module
 from django.utils.regex_helper import normalize
 from django.utils.thread_support import currentThread
+from django.utils.translation import get_language
+import re
+
 
 _resolver_cache = {} # Maps URLconf modules to RegexURLResolver instances.
 _callable_cache = {} # Maps view and url pattern names to their view functions.
@@ -102,19 +103,24 @@ def get_callable(lookup_view, can_fail=False):
     return lookup_view
 get_callable = memoize(get_callable, _callable_cache, 1)
 
-def set_resolver_class():
+def set_resolver_class(klass=None):
     global _resolver_class
-    module_name, class_name = settings.URL_RESOLVER.rsplit('.', 1)
-    module = import_module(module_name)
-    klass = getattr(module, class_name)
+    if not klass:
+        # TODO: appropriate exceptions if we cannot load the class
+        module_name, class_name = settings.URL_RESOLVER.rsplit('.', 1)
+        module = import_module(module_name)
+        klass = getattr(module, class_name)
     _resolver_class = klass
+    
+def get_resolver_class():
+    if not _resolver_class:
+        set_resolver_class()
+    return _resolver_class
 
 def get_resolver(urlconf):
     if urlconf is None:
         urlconf = settings.ROOT_URLCONF
-    if not _resolver_class:
-        set_resolver_class()
-    return _resolver_class(r'^/', urlconf)
+    return get_resolver_class()(r'^/', urlconf)
 get_resolver = memoize(get_resolver, _resolver_cache, 1)
 
 def get_mod_func(callback):
@@ -346,7 +352,39 @@ class RegexURLResolver(object):
             lookup_view_s = lookup_view
         raise NoReverseMatch("Reverse for '%s' with arguments '%s' and keyword "
                 "arguments '%s' not found." % (lookup_view_s, args, kwargs))
-        
+
+
+class LocalizedURLResolver(RegexURLResolver):
+    _language_patterns = None
+    
+    def __init__(self, *args, **kwargs):
+        if LocalizedURLResolver._language_patterns is None:
+            self._set_language_patterns()
+        super(LocalizedURLResolver, self).__init__(*args, **kwargs)
+    
+    def reverse(self, lookup_view, *args, **kwargs):
+        url = super(LocalizedURLResolver, self).reverse(lookup_view, *args, **kwargs)
+        language = get_language()
+        if language and isinstance(url, basestring):
+            return '%s/%s' % (language, url)
+        return url
+    
+    def resolve(self, path):
+        for pattern in LocalizedURLResolver._language_patterns:
+            new_path = pattern.sub('', path)
+            if new_path != path:
+                path = '/' + new_path
+                break
+        return super(LocalizedURLResolver, self).resolve(path)
+    
+    def _set_language_patterns(self):
+        languages = sorted([lang[0] for lang in settings.LANGUAGES], key=lambda x: -len(x))
+        patterns = []
+        for language in languages:
+            regex = re.compile(r'^/(%s)/' % language)
+            patterns.append(regex)
+        LocalizedURLResolver._language_patterns = patterns
+    
 
 def resolve(path, urlconf=None):
     if urlconf is None:

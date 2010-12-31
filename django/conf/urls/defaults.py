@@ -1,5 +1,6 @@
-from django.core.urlresolvers import RegexURLPattern, RegexURLResolver
 from django.core.exceptions import ImproperlyConfigured
+from django.core.urlresolvers import RegexURLPattern, RegexURLResolver, \
+    get_resolver_class
 
 __all__ = ['handler404', 'handler500', 'include', 'patterns', 'url']
 
@@ -31,7 +32,7 @@ def url(regex, view, kwargs=None, name=None, prefix=''):
     if isinstance(view, (list,tuple)):
         # For include(...) processing.
         urlconf_module, app_name, namespace = view
-        return RegexURLResolver(regex, urlconf_module, kwargs, app_name=app_name, namespace=namespace)
+        return get_resolver_class()(regex, urlconf_module, kwargs, app_name=app_name, namespace=namespace)
     else:
         if isinstance(view, basestring):
             if not view:

@@ -3,18 +3,19 @@ Unit tests for reverse URL lookups.
 """
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
-from django.core.urlresolvers import reverse, resolve, NoReverseMatch,\
-                                     Resolver404, ResolverMatch,\
-                                     RegexURLResolver, RegexURLPattern
+from django.core.urlresolvers import reverse, resolve, NoReverseMatch, \
+    Resolver404, ResolverMatch, RegexURLResolver, RegexURLPattern, \
+    LocalizedURLResolver, set_resolver_class
 from django.http import HttpResponseRedirect, HttpResponsePermanentRedirect
 from django.shortcuts import redirect
 from django.test import TestCase
 from django.utils import unittest
-
-import urlconf_outer
-import urlconf_inner
+from django.utils.translation import get_language, activate
 import middleware
+import urlconf_inner
+import urlconf_outer
 import views
+
 
 resolve_test_data = (
     # These entries are in the format: (path, url_name, app_name, namespace, view_func, args, kwargs)
@@ -430,6 +431,62 @@ class ResolverMatchTests(TestCase):
     def test_urlpattern_resolve(self):
         for path, name, app_name, namespace, func, args, kwargs in resolve_test_data:
             # Test legacy support for extracting "function, args, kwargs"
+            match_func, match_args, match_kwargs = resolve(path)
+            self.assertEqual(match_func, func)
+            self.assertEqual(match_args, args)
+            self.assertEqual(match_kwargs, kwargs)
+
+            # Test ResolverMatch capabilities.
+            match = resolve(path)
+            self.assertEqual(match.__class__, ResolverMatch)
+            self.assertEqual(match.url_name, name)
+            self.assertEqual(match.args, args)
+            self.assertEqual(match.kwargs, kwargs)
+            self.assertEqual(match.app_name, app_name)
+            self.assertEqual(match.namespace, namespace)
+            self.assertEqual(match.func, func)
+
+            # ... and for legacy purposes:
+            self.assertEquals(match[0], func)
+            self.assertEquals(match[1], args)
+            self.assertEquals(match[2], kwargs)
+            
+class LocalizedURLTestCase(TestCase):
+    def setUp(self):
+        self._old_language = get_language()
+        activate(settings.LANGUAGES[0][0])
+        set_resolver_class(LocalizedURLResolver)
+
+    def tearDown(self):
+        set_resolver_class() # reset to value in settings
+        activate(self._old_language)
+
+class LocalizedURLPatternReverse(LocalizedURLTestCase):
+    urls = 'regressiontests.urlpatterns_reverse.urls'
+
+    def test_urlpattern_reverse(self):
+        # test all 
+        language = get_language()
+        for name, raw_expected, args, kwargs in test_data:
+            if isinstance(raw_expected, basestring):
+                expected = '/%s%s' % (language, raw_expected)
+            else:
+                expected = raw_expected
+            try:
+                got = reverse(name, args=args, kwargs=kwargs)
+            except NoReverseMatch, e:
+                self.assertEqual(expected, NoReverseMatch)
+            else:
+                self.assertEquals(got, expected)
+
+class LocalizedResolverMatchTests(LocalizedURLTestCase):
+    urls = 'regressiontests.urlpatterns_reverse.namespace_urls'
+
+    def test_urlpattern_resolve(self):
+        language = get_language()
+        for path, name, app_name, namespace, func, args, kwargs in resolve_test_data:
+            # Test legacy support for extracting "function, args, kwargs"
+            path = '/%s%s' % (language, path)
             match_func, match_args, match_kwargs = resolve(path)
             self.assertEqual(match_func, func)
             self.assertEqual(match_args, args)
