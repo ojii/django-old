@@ -2,10 +2,11 @@
 Testing of admin inline formsets.
 
 """
-from django.db import models
 from django.contrib import admin
-from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes import generic
+from django.contrib.contenttypes.models import ContentType
+from django.db import models
+from django.contrib.admin.options import InlineModelAdmin
 
 class Parent(models.Model):
     name = models.CharField(max_length=50)
@@ -123,3 +124,12 @@ class InlineWeakness(admin.TabularInline):
     extra = 1
 
 admin.site.register(Fashionista, inlines=[InlineWeakness])
+
+# Don't register this because we only need it to test validation
+class InnerInlineNoTemplate(InlineModelAdmin):
+    model = Inner
+
+# Don't register this because we only need it to test validation
+class InnerInlineNonExistingTemplate(admin.TabularInline):
+    model = Inner
+    template = "does/not/exist.html"

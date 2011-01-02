@@ -1,10 +1,13 @@
 from django.contrib.admin.helpers import InlineAdminForm
+from django.contrib.admin.validation import validate_inline
 from django.contrib.contenttypes.models import ContentType
+from django.core.exceptions import ImproperlyConfigured
 from django.test import TestCase
+from models import Holder, Inner, InnerInline, Holder2, Inner2, Holder3, Inner3, \
+    Person, OutfitItem, Fashionista, Teacher, Parent, Child, InnerInlineNoTemplate, \
+    HolderAdmin, InnerInlineNonExistingTemplate
 
 # local test models
-from models import (Holder, Inner, InnerInline, Holder2, Inner2, Holder3,
-    Inner3, Person, OutfitItem, Fashionista, Teacher, Parent, Child)
 
 
 class TestInline(TestCase):
@@ -66,6 +69,15 @@ class TestInline(TestCase):
         response = self.client.post('/test_admin/admin/admin_inlines/fashionista/add/', data)
         self.assertEqual(response.status_code, 302)
         self.assertEqual(len(Fashionista.objects.filter(person__firstname='Imelda')), 1)
+    
+    def test_inline_template_validation(self):
+        self.assertRaises(ImproperlyConfigured, validate_inline,
+                          InnerInlineNoTemplate, HolderAdmin, Holder)
+        self.assertRaises(ImproperlyConfigured, validate_inline,
+                          InnerInlineNonExistingTemplate, HolderAdmin, Holder)
+        # check that regular inlines don't raise an exception:
+        validate_inline(InnerInline, HolderAdmin, Holder)
+        
 
 class TestInlineMedia(TestCase):
     fixtures = ['admin-views-users.xml']

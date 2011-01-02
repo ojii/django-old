@@ -1,11 +1,13 @@
+from django.contrib.admin.options import HORIZONTAL, VERTICAL, flatten_fieldsets, \
+    BaseModelAdmin
+from django.contrib.admin.util import get_fields_from_path, NotRelationField
 from django.core.exceptions import ImproperlyConfigured
 from django.db import models
 from django.db.models.fields import FieldDoesNotExist
-from django.forms.models import (BaseModelForm, BaseModelFormSet, fields_for_model,
-    _get_foreign_key)
-from django.contrib.admin.util import get_fields_from_path, NotRelationField
-from django.contrib.admin.options import flatten_fieldsets, BaseModelAdmin
-from django.contrib.admin.options import HORIZONTAL, VERTICAL
+from django.forms.models import BaseModelForm, BaseModelFormSet, \
+    fields_for_model, _get_foreign_key
+from django.template.base import TemplateDoesNotExist
+from django.template.loader import find_template
 
 
 __all__ = ['validate']
@@ -199,6 +201,16 @@ def validate_inline(cls, parent, parent_model):
             raise ImproperlyConfigured("%s cannot exclude the field "
                     "'%s' - this is the foreign key to the parent model "
                     "%s." % (cls.__name__, fk.name, parent_model.__name__))
+    
+    # template
+    template = getattr(cls, 'template', None)
+    if template is None:
+        raise ImproperlyConfigured("%s.template cannot be None" % cls.__name__)
+    try:
+        find_template(template)
+    except TemplateDoesNotExist:
+        raise ImproperlyConfigured("%s.template cannot be loaded, template "
+               "'%s' could not be found" % (cls.__name__, template))
 
 def validate_base(cls, model):
     opts = model._meta
