@@ -107,6 +107,22 @@ class AdminViewBasicTest(TestCase):
         response = self.client.post('/test_admin/%s/admin_views/section/add/' % self.urlbit, post_data)
         self.assertEqual(response.status_code, 302) # redirect somewhere
 
+    def testPopupAddPost(self):
+        """
+        Ensure http response from a popup is properly escaped.
+        """
+        post_data = {
+            '_popup': u'1',
+            'title': u'title with a new\nline',
+            'content': u'some content',
+            'date_0': u'2010-09-10',
+            'date_1': u'14:55:39',
+        }
+        response = self.client.post('/test_admin/%s/admin_views/article/add/' % self.urlbit, post_data)
+        self.failUnlessEqual(response.status_code, 200)
+        self.assertContains(response, 'dismissAddAnotherPopup')
+        self.assertContains(response, 'title with a new\u000Aline')
+
     # Post data for edit inline
     inline_post_data = {
         "name": u"Test section",
@@ -356,9 +372,15 @@ class AdminViewBasicTest(TestCase):
         )
 
         try:
-            self.client.get("/test_admin/admin/admin_views/stuff/?color__value__startswith=red")
+            self.client.get("/test_admin/admin/admin_views/thing/?color__value__startswith=red")
+            self.client.get("/test_admin/admin/admin_views/thing/?color__value=red")
         except SuspiciousOperation:
             self.fail("Filters are allowed if explicitly included in list_filter")
+
+        try:
+            self.client.get("/test_admin/admin/admin_views/person/?age__gt=30")
+        except SuspiciousOperation:
+            self.fail("Filters should be allowed if they involve a local field without the need to whitelist them in list_filter or date_hierarchy.")
 
 class SaveAsTests(TestCase):
     fixtures = ['admin-views-users.xml','admin-views-person.xml']
@@ -371,7 +393,7 @@ class SaveAsTests(TestCase):
 
     def test_save_as_duplication(self):
         """Ensure save as actually creates a new person"""
-        post_data = {'_saveasnew':'', 'name':'John M', 'gender':1}
+        post_data = {'_saveasnew':'', 'name':'John M', 'gender':1, 'age': 42}
         response = self.client.post('/test_admin/admin/admin_views/person/1/', post_data)
         self.assertEqual(len(Person.objects.filter(name='John M')), 1)
         self.assertEqual(len(Person.objects.filter(id=1)), 1)
