@@ -1,13 +1,10 @@
-import re
-import sys
-from urlparse import urlsplit, urlunsplit
-from xml.dom.minidom import parseString, Node
-
 from django.conf import settings
 from django.core import mail
 from django.core.management import call_command
+from django.core.signals import request_started
 from django.core.urlresolvers import clear_url_caches
-from django.db import transaction, connection, connections, DEFAULT_DB_ALIAS
+from django.db import transaction, connection, connections, DEFAULT_DB_ALIAS, \
+    reset_queries
 from django.http import QueryDict
 from django.test import _doctest as doctest
 from django.test.client import Client
@@ -15,6 +12,11 @@ from django.test.utils import get_warnings_state, restore_warnings_state
 from django.utils import simplejson, unittest as ut2
 from django.utils.encoding import smart_str
 from django.utils.functional import wraps
+from urlparse import urlsplit, urlunsplit
+from xml.dom.minidom import parseString, Node
+import re
+import sys
+
 
 __all__ = ('DocTestRunner', 'OutputChecker', 'TestCase', 'TransactionTestCase',
            'skipIfDBFeature', 'skipUnlessDBFeature')
@@ -215,21 +217,31 @@ class _AssertNumQueriesContext(object):
         self.test_case = test_case
         self.num = num
         self.connection = connection
+        self.executed = 0
+        
+    def reset_queries_wrapper(self, **kwargs):
+        self.executed += len(self.connection.queries) - self.starting_queries
+        self.starting_queries = 0
+        reset_queries(**kwargs)
 
     def __enter__(self):
         self.old_debug_cursor = self.connection.use_debug_cursor
         self.connection.use_debug_cursor = True
         self.starting_queries = len(self.connection.queries)
+        request_started.disconnect(reset_queries)
+        request_started.connect(self.reset_queries_wrapper, weak=False)
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.connection.use_debug_cursor = self.old_debug_cursor
+        request_started.connect(reset_queries)
+        request_started.disconnect(self.reset_queries_wrapper)
         if exc_type is not None:
             return
 
         final_queries = len(self.connection.queries)
-        executed = final_queries - self.starting_queries
-
+        executed = final_queries - self.starting_queries + self.executed
+        
         self.test_case.assertEqual(
             executed, self.num, "%d queries executed, %d expected" % (
                 executed, self.num
