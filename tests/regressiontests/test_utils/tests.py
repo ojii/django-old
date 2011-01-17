@@ -1,7 +1,7 @@
-from django.test import TestCase, skipUnlessDBFeature, skipIfDBFeature
 import sys
 
-from models import Person
+from django.test import TestCase, skipUnlessDBFeature, skipIfDBFeature
+
 
 if sys.version_info >= (2, 5):
     from tests_25 import AssertNumQueriesTests
