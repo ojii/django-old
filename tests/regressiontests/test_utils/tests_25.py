@@ -35,3 +35,7 @@ class AssertNumQueriesTests(TestCase):
             
         with self.assertNumQueries(1):
             self.client.get('/test_utils/get_person/%s/' % person.pk)
+        
+        with self.assertNumQueries(2):
+            self.client.get('/test_utils/get_person/%s/' % person.pk)
+            self.client.get('/test_utils/get_person/%s/' % person.pk)

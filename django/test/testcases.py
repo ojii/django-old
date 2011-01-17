@@ -6,8 +6,10 @@ from xml.dom.minidom import parseString, Node
 from django.conf import settings
 from django.core import mail
 from django.core.management import call_command
+from django.core.signals import request_started
 from django.core.urlresolvers import clear_url_caches
-from django.db import transaction, connection, connections, DEFAULT_DB_ALIAS
+from django.db import transaction, connection, connections, DEFAULT_DB_ALIAS, \
+    reset_queries
 from django.http import QueryDict
 from django.test import _doctest as doctest
 from django.test.client import Client
