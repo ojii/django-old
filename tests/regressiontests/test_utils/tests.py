@@ -1,7 +1,7 @@
+from django.test import TestCase, skipUnlessDBFeature, skipIfDBFeature
 import sys
 
-from django.test import TestCase, skipUnlessDBFeature, skipIfDBFeature
-
+from models import Person
 
 if sys.version_info >= (2, 5):
     from tests_25 import AssertNumQueriesTests
@@ -15,6 +15,22 @@ class SkippingTestCase(TestCase):
         self.assertRaises(ValueError,
             self.assertNumQueries, 2, test_func
         )
+        
+    def test_assert_num_queries_with_client(self):
+        person = Person.objects.create(name='test')
+        
+        self.assertNumQueries(
+            1,
+            self.client.get,
+            '/test_utils/get_person/%s/' % person.pk
+        )
+        
+        self.assertNumQueries(
+            1,
+            self.client.get,
+            '/test_utils/get_person/%s/' % person.pk
+        )
+
 
     def test_skip_unless_db_feature(self):
         "A test that might be skipped is actually called."
