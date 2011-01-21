@@ -29,11 +29,12 @@ from django.utils.translation import activate, deactivate
 from django.utils import unittest
 
 # local test models
-from models import Article, BarAccount, CustomArticle, EmptyModel, \
-    FooAccount, Gallery, ModelWithStringPrimaryKey, \
-    Person, Persona, Picture, Podcast, Section, Subscriber, Vodcast, \
-    Language, Collector, Widget, Grommet, DooHickey, FancyDoodad, Whatsit, \
-    Category, Post, Plot, FunkyTag, Chapter, Book, Promo
+from models import (Article, BarAccount, CustomArticle, EmptyModel,
+    FooAccount, Gallery, ModelWithStringPrimaryKey,
+    Person, Persona, Picture, Podcast, Section, Subscriber, Vodcast,
+    Language, Collector, Widget, Grommet, DooHickey, FancyDoodad, Whatsit,
+    Category, Post, Plot, FunkyTag, Chapter, Book, Promo, WorkHour, Employee,
+    Question, Answer)
 
 
 class AdminViewBasicTest(TestCase):
@@ -381,6 +382,16 @@ class AdminViewBasicTest(TestCase):
             self.client.get("/test_admin/admin/admin_views/person/?age__gt=30")
         except SuspiciousOperation:
             self.fail("Filters should be allowed if they involve a local field without the need to whitelist them in list_filter or date_hierarchy.")
+
+        e1 = Employee.objects.create(name='Anonymous', gender=1, age=22, alive=True, code='123')
+        e2 = Employee.objects.create(name='Visitor', gender=2, age=19, alive=True, code='124')
+        WorkHour.objects.create(datum=datetime.datetime.now(), employee=e1)
+        WorkHour.objects.create(datum=datetime.datetime.now(), employee=e2)
+        response = self.client.get("/test_admin/admin/admin_views/workhour/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'employee__person_ptr__exact')
+        response = self.client.get("/test_admin/admin/admin_views/workhour/?employee__person_ptr__exact=%d" % e1.pk)
+        self.assertEqual(response.status_code, 200)
 
 class SaveAsTests(TestCase):
     fixtures = ['admin-views-users.xml','admin-views-person.xml']
@@ -874,6 +885,15 @@ class AdminViewDeletedObjectsTest(TestCase):
         self.assertContains(response, "your account doesn't have permission to delete the following types of objects")
         self.assertContains(response, "<li>plot details</li>")
 
+    def test_protected(self):
+        q = Question.objects.create(question="Why?")
+        a1 = Answer.objects.create(question=q, answer="Because.")
+        a2 = Answer.objects.create(question=q, answer="Yes.")
+
+        response = self.client.get("/test_admin/admin/admin_views/question/%s/delete/" % quote(q.pk))
+        self.assertContains(response, "would require deleting the following protected related objects")
+        self.assertContains(response, '<li>Answer: <a href="/test_admin/admin/admin_views/answer/%s/">Because.</a></li>' % a1.pk)
+        self.assertContains(response, '<li>Answer: <a href="/test_admin/admin/admin_views/answer/%s/">Yes.</a></li>' % a2.pk)
 
     def test_not_registered(self):
         should_contain = """<li>Secret hideout: underground bunker"""
@@ -1612,10 +1632,32 @@ class AdminActionsTest(TestCase):
             'post': 'yes',
         }
         confirmation = self.client.post('/test_admin/admin/admin_views/subscriber/', action_data)
-        self.assertContains(confirmation, "Are you sure you want to delete the selected subscriber objects")
+        self.assertContains(confirmation, "Are you sure you want to delete the selected subscribers")
         self.assertTrue(confirmation.content.count(ACTION_CHECKBOX_NAME) == 2)
         response = self.client.post('/test_admin/admin/admin_views/subscriber/', delete_confirmation_data)
         self.assertEqual(Subscriber.objects.count(), 0)
+
+    def test_model_admin_default_delete_action_protected(self):
+        """
+        Tests the default delete action defined as a ModelAdmin method in the
+        case where some related objects are protected from deletion.
+        """
+        q1 = Question.objects.create(question="Why?")
+        a1 = Answer.objects.create(question=q1, answer="Because.")
+        a2 = Answer.objects.create(question=q1, answer="Yes.")
+        q2 = Question.objects.create(question="Wherefore?")
+
+        action_data = {
+            ACTION_CHECKBOX_NAME: [q1.pk, q2.pk],
+            'action' : 'delete_selected',
+            'index': 0,
+        }
+
+        response = self.client.post("/test_admin/admin/admin_views/question/", action_data)
+
+        self.assertContains(response, "would require deleting the following protected related objects")
+        self.assertContains(response, '<li>Answer: <a href="/test_admin/admin/admin_views/answer/%s/">Because.</a></li>' % a1.pk)
+        self.assertContains(response, '<li>Answer: <a href="/test_admin/admin/admin_views/answer/%s/">Yes.</a></li>' % a2.pk)
 
     def test_custom_function_mail_action(self):
         "Tests a custom action defined in a function"

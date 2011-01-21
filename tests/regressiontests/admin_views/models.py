@@ -615,6 +615,27 @@ class Album(models.Model):
 class AlbumAdmin(admin.ModelAdmin):
     list_filter = ['title']
 
+class Employee(Person):
+    code = models.CharField(max_length=20)
+
+class WorkHour(models.Model):
+    datum = models.DateField()
+    employee = models.ForeignKey(Employee)
+
+class WorkHourAdmin(admin.ModelAdmin):
+    list_display = ('datum', 'employee')
+    list_filter = ('employee',)
+
+class Question(models.Model):
+    question = models.CharField(max_length=20)
+
+class Answer(models.Model):
+    question = models.ForeignKey(Question, on_delete=models.PROTECT)
+    answer = models.CharField(max_length=20)
+
+    def __unicode__(self):
+        return self.answer
+
 admin.site.register(Article, ArticleAdmin)
 admin.site.register(CustomArticle, CustomArticleAdmin)
 admin.site.register(Section, save_as=True, inlines=[ArticleInline])
@@ -646,6 +667,7 @@ admin.site.register(Plot)
 admin.site.register(PlotDetails)
 admin.site.register(CyclicOne)
 admin.site.register(CyclicTwo)
+admin.site.register(WorkHour, WorkHourAdmin)
 
 # We intentionally register Promo and ChapterXtra1 but not Chapter nor ChapterXtra2.
 # That way we cover all four cases:
@@ -662,3 +684,5 @@ admin.site.register(ChapterXtra1, ChapterXtra1Admin)
 admin.site.register(Pizza, PizzaAdmin)
 admin.site.register(Topping)
 admin.site.register(Album, AlbumAdmin)
+admin.site.register(Question)
+admin.site.register(Answer)

@@ -143,6 +143,7 @@ urlpatterns += patterns('django.views.generic.simple',
 urlpatterns += patterns('regressiontests.views.views',
     url(r'view_exception/(?P<n>\d+)/$', 'view_exception', name='view_exception'),
     url(r'template_exception/(?P<n>\d+)/$', 'template_exception', name='template_exception'),
+    url(r'^raises_template_does_not_exist/$', 'raises_template_does_not_exist', name='raises_template_does_not_exist'),
 
     (r'^shortcuts/render_to_response/$', 'render_to_response_view'),
     (r'^shortcuts/render_to_response/request_context/$', 'render_to_response_view_with_request_context'),
@@ -151,7 +152,8 @@ urlpatterns += patterns('regressiontests.views.views',
     (r'^shortcuts/render/base_context/$', 'render_view_with_base_context'),
     (r'^shortcuts/render/content_type/$', 'render_view_with_content_type'),
     (r'^shortcuts/render/status/$', 'render_view_with_status'),
-
+    (r'^shortcuts/render/current_app/$', 'render_view_with_current_app'),
+    (r'^shortcuts/render/current_app_conflict/$', 'render_view_with_current_app_conflict'),
 )
 
 # simple generic views.
