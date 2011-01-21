@@ -7,7 +7,7 @@ from django.test import TestCase
 # local test models
 from models import (Holder, Inner, InnerInline, Holder2, Inner2, Holder3,
     Inner3, Person, OutfitItem, Fashionista, Teacher, Parent, Child,
-    InnerInlineNonExistingTemplate, InnerInlineNoTemplate)
+    InnerInlineNonExistingTemplate, InnerInlineNoTemplate, HolderAdmin)
 
 # local test models
 
