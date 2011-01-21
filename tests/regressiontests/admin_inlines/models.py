@@ -2,10 +2,10 @@
 Testing of admin inline formsets.
 
 """
-from django.contrib import admin
-from django.contrib.contenttypes import generic
-from django.contrib.contenttypes.models import ContentType
 from django.db import models
+from django.contrib import admin
+from django.contrib.contenttypes.models import ContentType
+from django.contrib.contenttypes import generic
 from django.contrib.admin.options import InlineModelAdmin
 
 class Parent(models.Model):

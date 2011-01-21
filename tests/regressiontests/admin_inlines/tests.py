@@ -1,11 +1,13 @@
 from django.contrib.admin.helpers import InlineAdminForm
-from django.contrib.admin.validation import validate_inline
 from django.contrib.contenttypes.models import ContentType
+from django.contrib.admin.validation import validate_inline
 from django.core.exceptions import ImproperlyConfigured
 from django.test import TestCase
-from models import Holder, Inner, InnerInline, Holder2, Inner2, Holder3, Inner3, \
-    Person, OutfitItem, Fashionista, Teacher, Parent, Child, InnerInlineNoTemplate, \
-    HolderAdmin, InnerInlineNonExistingTemplate
+
+# local test models
+from models import (Holder, Inner, InnerInline, Holder2, Inner2, Holder3,
+    Inner3, Person, OutfitItem, Fashionista, Teacher, Parent, Child,
+    InnerInlineNonExistingTemplate, InnerInlineNoTemplate)
 
 # local test models
 
