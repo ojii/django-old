@@ -3,6 +3,7 @@ from datetime import datetime
 
 from django.test import TestCase
 from django.core.exceptions import FieldError
+from django.utils.translation import ugettext_lazy
 
 from models import Article, Reporter
 
@@ -372,3 +373,14 @@ class ManyToOneTests(TestCase):
         # recursive don't cause recursion depth problems under deepcopy.
         self.r.cached_query = Article.objects.filter(reporter=self.r)
         self.assertEqual(repr(deepcopy(self.r)), "<Reporter: John Smith>")
+
+    def test_create_relation_with_ugettext_lazy(self):
+        reporter = Reporter.objects.create(first_name='John',
+                                           last_name='Smith',
+                                           email='john.smith@example.com')
+        lazy = ugettext_lazy(u'test')
+        reporter.article_set.create(headline=lazy,
+                                    pub_date=datetime(2011, 6, 10))
+        notlazy = unicode(lazy)
+        article = reporter.article_set.get()
+        self.assertEqual(article.headline, notlazy)
