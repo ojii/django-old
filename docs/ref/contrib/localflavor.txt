@@ -243,7 +243,8 @@ Austria (``at``)
 
 .. class:: at.forms.ATZipCodeField
 
-    A form field that validates its input as an Austrian zip code.
+    A form field that validates its input as an Austrian zip code, with the
+    format XXXX (first digit must be greater than 0).
 
 .. class:: at.forms.ATStateSelect
 
@@ -1059,7 +1060,7 @@ Switzerland (``ch``)
 
     A form field that validates input as a Swiss identity card number.
     A valid number must confirm to the X1234567<0 or 1234567890 format and
-    have the correct checksums -- see http://adi.kousz.ch/artikel/IDCHE.htm.
+    have the correct checksums.
 
 .. class:: ch.forms.CHPhoneNumberField
 
