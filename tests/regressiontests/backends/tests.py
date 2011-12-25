@@ -588,4 +588,4 @@ class ThreadTests(TestCase):
 
 class BackendLoadingTests(TestCase):
     def test_old_style_backends_raise_useful_exception(self):
-        self.assertRaises(ImproperlyConfigured, load_backend, 'sqlite3')
+        self.assertRaisesRegexp(ImproperlyConfigured, "The backend you are probably looking for is django.db.backends.sqlite3", load_backend, 'sqlite3')
