@@ -49,7 +49,9 @@ def add_lazy_relation(cls, field, relation, operation):
     if relation == RECURSIVE_RELATIONSHIP_CONSTANT:
         app_label = cls._meta.app_label
         model_name = cls.__name__
-
+    elif not isinstance(relation, basestring):
+        app_label = relation._meta.app_label
+        model_name = relation._meta.object_name
     else:
         # Look for an "app.Model" relation
         try:
