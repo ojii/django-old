@@ -32,13 +32,22 @@ def load_backend(backend_name):
                     and not f.startswith('.')]
         except EnvironmentError:
             available_backends = []
-        if backend_name.startswith('django.db.backends.'):
+        new_style_import = backend_name.startswith('django.db.backends.')
+        if new_style_import:
             backend_name = backend_name[19:] # See #15621.
         if backend_name not in available_backends:
             error_msg = ("%r isn't an available database backend. \n" +
                 "Try using django.db.backends.XXX, where XXX is one of:\n    %s\n" +
                 "Error was: %s") % \
                 (backend_name, ", ".join(map(repr, sorted(available_backends))), e_user)
+            raise ImproperlyConfigured(error_msg)
+        elif not new_style_import:
+            # user tried to use database backend using old-school non-qualified
+            # import path (eg 'sqlite3' instead of 'django.db.backends.sqlite3')
+            error_msg = ("%r isn't an available database backend.\n"
+                 "The backend you are probably looking for is django.db.backends.%s\n"
+                 "Error was: %s"
+            ) % (backend_name, backend_name, e_user)
             raise ImproperlyConfigured(error_msg)
         else:
             raise # If there's some other error, this must be an error in Django itself.
