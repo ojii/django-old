@@ -3,7 +3,7 @@ from __future__ import absolute_import
 from copy import deepcopy
 from datetime import datetime
 
-from django.core.exceptions import MultipleObjectsReturned
+from django.core.exceptions import MultipleObjectsReturned, FieldError
 from django.test import TestCase
 
 from .models import Article, Reporter
@@ -411,3 +411,7 @@ class ManyToOneTests(TestCase):
 
         # Same as each other
         self.assertTrue(r1.article_set.__class__ is r2.article_set.__class__)
+        
+    def test_values_list_exception(self):
+        expected_message = "Cannot resolve keyword 'notafield' into field. Choices are: %s" % ', '.join(Reporter._meta.get_all_field_names())
+        self.assertRaisesMessage(FieldError, expected_message, Article.objects.values_list, 'reporter__notafield')
